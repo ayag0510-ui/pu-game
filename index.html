@@ -465,19 +465,30 @@
   }
 
   // UI wiring
-  document.getElementById('startBtn').onclick=()=>{ AudioSys.ensure(); startGame(); };
-  document.getElementById('howBtn').onclick=()=>{ document.getElementById('modalHow').style.display='grid'; };
-  document.getElementById('howClose').onclick=()=>{ document.getElementById('modalHow').style.display='none'; };
-  document.getElementById('btnPause').onclick=()=>{ if(gameState!=='playing') return; gameState='paused'; document.getElementById('btnPause').textContent='▶';
-    const p=document.getElementById('endPanel'); document.getElementById('modalEnd').style.display='grid'; p.innerHTML=`<h2 style="margin:0 0 6px 0">一時停止</h2><div class="rowwrap"><button class="primary" onclick="resumeGame()">▶ 再開</button><button class="ghost" onclick="backToTitle()">タイトルへ</button></div>`;
-  };
-  function resumeGame(){ document.getElementById('modalEnd').style.display='none'; gameState='playing'; document.getElementById('btnPause').textContent='⏸'; }
-  window.resumeGame=resumeGame; window.backToTitle=backToTitle; window.startGame=startGame;
+  function bindUI(){
+    const startBtnEl=document.getElementById('startBtn');
+    const howBtnEl=document.getElementById('howBtn');
+    const howCloseEl=document.getElementById('howClose');
+    const btnPauseEl=document.getElementById('btnPause');
+    const btnAudioEl=document.getElementById('btnAudio');
 
-  document.getElementById('btnAudio').onclick=()=>{ AudioSys.toggle(); document.getElementById('btnAudio').textContent = AudioSys.enabled? '🔊':'🔈'; };
+    if(startBtnEl) startBtnEl.onclick=()=>{ AudioSys.ensure(); startGame(); };
+    if(howBtnEl) howBtnEl.onclick=()=>{ document.getElementById('modalHow').style.display='grid'; };
+    if(howCloseEl) howCloseEl.onclick=()=>{ document.getElementById('modalHow').style.display='none'; };
+    if(btnPauseEl) btnPauseEl.onclick=()=>{ if(gameState!=='playing') return; gameState='paused'; document.getElementById('btnPause').textContent='▶';
+      const p=document.getElementById('endPanel'); document.getElementById('modalEnd').style.display='grid'; p.innerHTML=`<h2 style="margin:0 0 6px 0">一時停止</h2><div class=\"rowwrap\"><button class=\"primary\" onclick=\"resumeGame()\">▶ 再開</button><button class=\"ghost\" onclick=\"backToTitle()\">タイトルへ</button></div>`;
+    };
+    if(btnAudioEl) btnAudioEl.onclick=()=>{ AudioSys.toggle(); document.getElementById('btnAudio').textContent = AudioSys.enabled? '🔊':'🔈'; };
 
-  // init
-  setupControls(); resize(); renderRanks(); requestAnimationFrame(loop);
+    // どこを押しても開始する保険（タイトル時）
+    document.getElementById('wrap').addEventListener('pointerdown', ()=>{ if(gameState==='title'){ AudioSys.ensure(); startGame(); } }, {passive:true});
+    window.addEventListener('keydown', ()=>{ if(gameState==='title'){ AudioSys.ensure(); startGame(); } });
+  }
+
+  // init after DOM is ready
+  window.addEventListener('load', ()=>{
+    setupControls(); resize(); renderRanks(); bindUI(); requestAnimationFrame(loop);
+  });
   </script>
 </body>
 </html>
