@@ -18,7 +18,7 @@
     canvas{position:absolute;inset:0; display:block;}
 
     /* HUD */
-    .hud{position:absolute; inset:0; pointer-events:none;}
+    .hud{position:absolute; inset:0; /* pointer-events:none;  <- クリックを殺していたので解除 */}
     .topbar{position:absolute; top:8px; left:8px; right:8px; display:flex; gap:8px; align-items:center;}
     .card{background:var(--ui-bg); backdrop-filter: blur(6px); border-radius:16px; padding:8px 12px; box-shadow: var(--shadow); pointer-events:auto;}
     .grow{flex:1}
