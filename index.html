@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>行け！ぷぅ太郎！！</title>
+  <style>
+    :root{
+      --ui-bg: rgba(255,255,255,.8);
+      --ui-text: #14324a;
+      --accent: #28a6ff;
+      --danger: #ff4968;
+      --ok: #23c483;
+      --shadow: 0 8px 24px rgba(0,0,0,.18);
+    }
+    html,body{height:100%;margin:0;background:#eef6ff; color:#14324a; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;}
+    #wrap{position:relative;height:100dvh;width:100vw;overflow:hidden;}
+    canvas{position:absolute;inset:0; display:block;}
+
+    /* HUD */
+    .hud{position:absolute; inset:0; pointer-events:none;}
+    .topbar{position:absolute; top:8px; left:8px; right:8px; display:flex; gap:8px; align-items:center;}
+    .card{background:var(--ui-bg); backdrop-filter: blur(6px); border-radius:16px; padding:8px 12px; box-shadow: var(--shadow); pointer-events:auto;}
+    .grow{flex:1}
+    .row{display:flex; align-items:center; gap:8px}
+    .hpbar{height:12px; background:#fff; border-radius:8px; position:relative; overflow:hidden; width:min(46vw,320px);}
+    .hpfill{position:absolute; left:0; top:0; bottom:0; background: linear-gradient(90deg, #49d6ff, #2c6bff);}
+    .btn{cursor:pointer; user-select:none;}
+    .btn.icon{padding:8px 10px; display:flex; align-items:center; justify-content:center; font-weight:700;}
+    .btn.pause{background:#fff;}
+    .btn.audio{background:#fff;}
+    .stat{min-width:100px; text-align:center; font-weight:700}
+
+    /* Title & modals */
+    .center{position:absolute; inset:0; display:grid; place-items:center;}
+    .panel{background:var(--ui-bg); border-radius:20px; padding:18px 20px; width:min(560px,92vw); box-shadow:var(--shadow);}
+    h1{margin:0 0 6px 0; font-size: clamp(22px, 6vw, 34px); letter-spacing:.02em}
+    .subtitle{opacity:.8; margin-bottom:12px}
+    .panel .rowwrap{display:flex; gap:12px; flex-wrap:wrap;}
+    .panel .rowwrap > *{flex:1; min-width:180px}
+    .primary{background:linear-gradient(180deg,#4fc7ff,#2e8fff); color:white; border:none; padding:12px 20px; border-radius:14px; font-weight:800; box-shadow: var(--shadow);}
+    .ghost{background:#fff; border:none; padding:10px 14px; border-radius:12px; font-weight:700}
+
+    /* Mobile controls */
+    .controls{position:absolute; inset:0; pointer-events:none;}
+    .joy{position:absolute; left:14px; bottom:18px; width:160px; height:160px; pointer-events:auto; touch-action:none;}
+    .joy .base{position:absolute; width:160px;height:160px;border-radius:50%; background:rgba(255,255,255,.7); box-shadow:var(--shadow);}
+    .joy .stick{position:absolute; width:82px;height:82px;border-radius:50%; background:#ffffff; left:39px; top:39px; display:grid; place-items:center; box-shadow: var(--shadow)}
+    .btns{position:absolute; right:14px; bottom:18px; display:flex; flex-direction:column; gap:14px; pointer-events:auto;}
+    .cbtn{width:86px; height:86px; border-radius:50%; background:#fff; box-shadow: var(--shadow); display:grid; place-items:center; font-weight:900; touch-action:none; user-select:none;}
+    .cbtn.small{width:64px;height:64px; font-size:12px}
+
+    @media (min-width: 900px){
+      /* show smaller controls on desktop */
+      .joy{opacity:.7}
+      .btns{opacity:.7}
+    }
+
+    /* Ranking */
+    .rank{margin-top:10px;}
+    .rank table{width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums}
+    .rank th,.rank td{padding:6px 8px; text-align:left; border-bottom:1px solid rgba(20,50,74,.08)}
+    .muted{opacity:.7}
+
+    /* Badges */
+    .badge{display:inline-block; padding:2px 8px; border-radius:999px; background:#fff; box-shadow:var(--shadow); font-size:12px; font-weight:700}
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+
+    <!-- HUD -->
+    <div class="hud">
+      <div class="topbar">
+        <div class="card row" style="gap:10px;">
+          <div class="badge">HP</div>
+          <div class="hpbar"><div id="hpfill" class="hpfill" style="width:100%"></div></div>
+        </div>
+        <div class="card stat grow" id="statScore">スコア 0</div>
+        <div class="card stat" id="statTime">00:00</div>
+        <div class="card row" style="gap:8px">
+          <div id="btnAudio" class="btn icon audio" aria-label="音のON/OFF">🔊</div>
+          <div id="btnPause" class="btn icon pause" aria-label="一時停止">⏸</div>
+        </div>
+      </div>
+
+      <div id="title" class="center">
+        <div class="panel">
+          <h1>行け！ぷぅ太郎！！</h1>
+          <div class="subtitle">スコア <b>30</b> に到達する最速タイムを目指そう！<br>（スマホ推奨・縦持ち／仮想スティック＋2ボタン）</div>
+          <div class="rowwrap">
+            <button id="startBtn" class="primary">▶ はじめる</button>
+            <button id="howBtn" class="ghost">？ あそびかた</button>
+          </div>
+          <div class="rank" id="rankList"></div>
+        </div>
+      </div>
+
+      <div id="modalHow" class="center" style="display:none">
+        <div class="panel">
+          <h2 style="margin:0 0 8px 0">あそびかた</h2>
+          <ul style="margin:6px 0 12px 18px; line-height:1.6">
+            <li>左下：スティックで移動</li>
+            <li>右下：<b>斬</b>（近接攻撃）／<b>炎</b>（炎の魔法）</li>
+            <li>敵に当たるとダメージ。<b>星</b>を取ると<b>10秒間無敵</b></li>
+            <li>敵の出現は最大<b>2体</b>まで。同時数は増えないが時間で速度アップ</li>
+            <li>スコア：スライム<b>+1</b>、ゴブリン<b>+2</b>、ボス<b>+10</b></li>
+            <li>スコア<b>30</b>に達した<b>最短タイム</b>がランキングに保存されます</li>
+          </ul>
+          <div class="rowwrap">
+            <button class="primary" id="howClose">OK</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="modalEnd" class="center" style="display:none">
+        <div class="panel" id="endPanel"> </div>
+      </div>
+    </div>
+
+    <!-- On-screen Controls -->
+    <div class="controls" id="controls">
+      <div class="joy" id="joy">
+        <div class="base"></div>
+        <div class="stick" id="stick">⬤</div>
+      </div>
+      <div class="btns">
+        <div class="cbtn" id="btnSlash">斬</div>
+        <div class="cbtn" id="btnFire">炎</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  "use strict";
+  // ===== Utilities =====
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const rand=(a=1,b=null)=> b===null? Math.random()*a : a+Math.random()*(b-a);
+  const choice=(arr)=>arr[(Math.random()*arr.length)|0];
+  const nowMs=()=>performance.now();
+
+  function formatTime(sec){
+    const s=Math.floor(sec%60).toString().padStart(2,'0');
+    const m=Math.floor(sec/60).toString().padStart(2,'0');
+    return `${m}:${s}`;
+  }
+
+  // ===== Audio (WebAudio, lightweight beeps) =====
+  const AudioSys={
+    ctx:null, enabled:true, music:null, gain:null,
+    ensure(){
+      if(!this.ctx){
+        this.ctx=new (window.AudioContext||window.webkitAudioContext)();
+        this.gain=this.ctx.createGain(); this.gain.gain.value=0.18; this.gain.connect(this.ctx.destination);
+      }
+    },
+    toggle(){ this.enabled=!this.enabled; if(this.music){ this.music.gain.gain.value=this.enabled?0.05:0; } },
+    play(name){ if(!this.enabled) return; this.ensure(); const t=this.ctx.currentTime; const o=this.ctx.createOscillator(); const g=this.ctx.createGain(); g.gain.value=0.001; g.connect(this.gain); o.connect(g);
+      if(name==='slash'){ o.type='square'; o.frequency.setValueAtTime(520,t); g.gain.exponentialRampToValueAtTime(0.18,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.15); }
+      else if(name==='fire'){ o.type='sawtooth'; o.frequency.setValueAtTime(360,t); g.gain.exponentialRampToValueAtTime(0.16,t+0.04); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22); }
+      else if(name==='hit'){ o.type='triangle'; o.frequency.setValueAtTime(180,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.25); }
+      else if(name==='dead'){ o.type='sine'; o.frequency.setValueAtTime(110,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.04); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5); }
+      else if(name==='star'){ o.type='triangle'; o.frequency.linearRampToValueAtTime(800,t+0.12); g.gain.exponentialRampToValueAtTime(0.2,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.4); }
+      o.start(); o.stop(t+0.6);
+    },
+    startMusic(){ if(this.music) return; this.ensure();
+      // simple mellow chord pad
+      const ctx=this.ctx; const g=ctx.createGain(); g.gain.value=0.05; g.connect(ctx.destination); this.music={gain:g};
+      const freqs=[196,246.94,293.66,329.63];
+      freqs.forEach((f,i)=>{ const o=ctx.createOscillator(); const og=ctx.createGain(); o.type='sine'; o.frequency.value=f; og.gain.value=0.0001; o.connect(og); og.connect(g); o.start();
+        const loop=()=>{ const t=ctx.currentTime; og.gain.linearRampToValueAtTime(0.016,t+0.2); og.gain.linearRampToValueAtTime(0.0001,t+6.0+rand(0,0.6)); }; setInterval(loop, 5500+i*1300); loop();
+      });
+    }
+  };
+
+  // ===== Input (virtual joystick + buttons + keyboard fallback) =====
+  const input={ dx:0, dy:0, slash:false, fire:false, facingX:1, facingY:0, hasPointerLock:false };
+  const joyEl=document.getElementById('joy'); const stickEl=document.getElementById('stick');
+  const btnSlash=document.getElementById('btnSlash'); const btnFire=document.getElementById('btnFire');
+  let joyPointer=-1, slashPointer=-1, firePointer=-1;
+
+  function setupControls(){
+    const rectSize=160; const stickR=41; let cx=rectSize/2, cy=rectSize/2;
+    const setStick=(x,y)=>{ const dx=x-cx, dy=y-cy; const len=Math.hypot(dx,dy); const max=56; const nx=len>0?dx/len:0, ny=len>0?dy/len:0; const mag=Math.min(max,len); stickEl.style.left=(cx+nx*mag-41)+'px'; stickEl.style.top=(cy+ny*mag-41)+'px'; input.dx=nx*(len>12?1:0); input.dy=ny*(len>12?1:0); if(Math.abs(input.dx)+Math.abs(input.dy)>0.1){ input.facingX=nx; input.facingY=ny; }}
+
+    joyEl.addEventListener('pointerdown', e=>{ if(joyPointer!==-1) return; joyPointer=e.pointerId; joyEl.setPointerCapture(joyPointer); const rect=joyEl.getBoundingClientRect(); setStick(e.clientX-rect.left, e.clientY-rect.top); });
+    joyEl.addEventListener('pointermove', e=>{ if(e.pointerId!==joyPointer) return; const rect=joyEl.getBoundingClientRect(); setStick(e.clientX-rect.left, e.clientY-rect.top); });
+    const end=()=>{ joyPointer=-1; input.dx=0; input.dy=0; stickEl.style.left=(cx-41)+'px'; stickEl.style.top=(cy-41)+'px'; };
+    joyEl.addEventListener('pointerup', end); joyEl.addEventListener('pointercancel', end);
+
+    function bindBtn(el, flagName){
+      el.addEventListener('pointerdown', e=>{ if(flagName==='slash'){ slashPointer=e.pointerId; } else { firePointer=e.pointerId; }
+        input[flagName]=true; el.setPointerCapture(e.pointerId); e.preventDefault(); });
+      const up=(e)=>{ if((flagName==='slash' && e.pointerId!==slashPointer) || (flagName==='fire' && e.pointerId!==firePointer)) return; input[flagName]=false; if(flagName==='slash') slashPointer=-1; else firePointer=-1; };
+      el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    }
+    bindBtn(btnSlash,'slash'); bindBtn(btnFire,'fire');
+
+    // Keyboard fallback (desktop)
+    window.addEventListener('keydown', e=>{
+      if(e.repeat) return;
+      if(e.key==='ArrowLeft'||e.key==='a') input.dx=-1;
+      if(e.key==='ArrowRight'||e.key==='d') input.dx=1;
+      if(e.key==='ArrowUp'||e.key==='w') input.dy=-1;
+      if(e.key==='ArrowDown'||e.key==='s') input.dy=1;
+      if(e.key==='j') input.slash=true;
+      if(e.key==='k') input.fire=true;
+    });
+    window.addEventListener('keyup', e=>{
+      if(['ArrowLeft','a','ArrowRight','d'].includes(e.key)) input.dx=0;
+      if(['ArrowUp','w','ArrowDown','s'].includes(e.key)) input.dy=0;
+      if(e.key==='j') input.slash=false;
+      if(e.key==='k') input.fire=false;
+    });
+  }
+
+  // ===== Game Core =====
+  const canvas=document.getElementById('game'); const ctx=canvas.getContext('2d');
+  let W=0,H=0, scale=1;
+  function resize(){
+    const dpr = Math.min(2, window.devicePixelRatio||1);
+    W = Math.floor(window.innerWidth * dpr);
+    H = Math.floor(window.innerHeight * dpr);
+    canvas.width=W; canvas.height=H; canvas.style.width='100%'; canvas.style.height='100%';
+    scale = Math.min(W/720, H/1280); // portrait design baseline 720x1280
+  }
+  window.addEventListener('resize', resize);
+
+  // Stage themes
+  const Themes={
+    forest:{bg:'#dff7e6', mid:'#b2e3c4', deco:'#7bc099'},
+    ocean:{bg:'#e6f3ff', mid:'#b7dbff', deco:'#8ec5ff'},
+    city:{bg:'#f3f6fb', mid:'#e2e8f4', deco:'#c5cee0'},
+  };
+
+  // Entities
+  class Entity{ constructor(x,y,r){ this.x=x; this.y=y; this.r=r; this.vx=0; this.vy=0; this.dead=false; }
+    dist2(e){ const dx=this.x-e.x, dy=this.y-e.y; return dx*dx+dy*dy; }
+  }
+
+  class Player extends Entity{
+    constructor(){ super(W/2,H*0.65, 18*scale); this.hp=5; this.maxhp=5; this.facingX=1; this.facingY=0; this.slashCD=0; this.fireCD=0; this.invincibleUntil=0; }
+  }
+
+  class Enemy extends Entity{ constructor(x,y,r,type){ super(x,y,r); this.type=type; this.hp= type==='slime'?1: type==='goblin'?3:5; this.dmg= type==='boss'?2:1; this.baseSpeed= type==='slime'? 60: type==='goblin'? 90: 70; this.t=0; }
+  }
+
+  class Projectile extends Entity{ constructor(x,y,dirx,diry,speed,life,kind){ super(x,y,8*scale); this.vx=dirx*speed; this.vy=diry*speed; this.life=life; this.kind=kind; }
+  }
+
+  class Obstacle{ constructor(x,y,w,h){ this.x=x; this.y=y; this.w=w; this.h=h; }
+    draw(){ ctx.fillStyle=currentTheme.deco; ctx.fillRect(this.x,this.y,this.w,this.h); ctx.strokeStyle='rgba(0,0,0,.06)'; ctx.strokeRect(this.x,this.y,this.w,this.h); }
+  }
+
+  class Star extends Entity{ constructor(x,y){ super(x,y,14*scale); this.ttl=14; }
+  }
+
+  // Game State
+  let gameState='title';
+  let player, enemies=[], projs=[], obstacles=[], stars=[], score=0, timer=0, stageStart=0, themeKey='forest', currentTheme=Themes.forest;
+  let lastSpawn=0, spawnInterval=2.4, speedScale=1, maxEnemies=2;
+
+  function reset(){
+    // theme
+    themeKey = choice(Object.keys(Themes)); currentTheme=Themes[themeKey];
+    // layout obstacles (portrait friendly)
+    const margin=80*scale, w=W - margin*2, h=H - margin*2;
+    obstacles=[
+      new Obstacle(W/2-120*scale, H*0.42, 240*scale, 20*scale),
+      new Obstacle(W*0.2, H*0.78, 160*scale, 18*scale),
+      new Obstacle(W*0.68, H*0.18, 180*scale, 18*scale),
+    ];
+
+    player = new Player(); enemies=[]; projs=[]; stars=[]; score=0; timer=0; stageStart=nowMs()/1000; lastSpawn=0; spawnInterval=2.4; speedScale=1;
+    updateHUD();
+  }
+
+  // Collision helpers
+  function circleHit(a,b){ const dx=a.x-b.x, dy=a.y-b.y; const rr=a.r+b.r; return dx*dx+dy*dy <= rr*rr; }
+  function hitObstacle(e){ for(const o of obstacles){ if(e.x>o.x-e.r && e.x<o.x+o.w+e.r && e.y>o.y-e.r && e.y<o.y+o.h+e.r){
+      // resolve by pushing out minimal axis
+      const left = e.x-(o.x-e.r); const right=(o.x+o.w+e.r)-e.x; const top=e.y-(o.y-e.r); const bottom=(o.y+o.h+e.r)-e.y;
+      const min=Math.min(left,right,top,bottom);
+      if(min===left) e.x=o.x-e.r; else if(min===right) e.x=o.x+o.w+e.r; else if(min===top) e.y=o.y-e.r; else e.y=o.y+o.h+e.r;
+    }} }
+
+  // Spawning
+  function spawnEnemy(){ if(enemies.length>=maxEnemies) return; const side=choice(['top','bottom','left','right']);
+    let x=0,y=0; if(side==='top'){ x=rand(W*0.15,W*0.85); y= -40*scale; } else if(side==='bottom'){ x=rand(W*0.15,W*0.85); y= H+40*scale; } else if(side==='left'){ x=-40*scale; y=rand(H*0.15,H*0.85); } else { x=W+40*scale; y=rand(H*0.15,H*0.85); }
+    const roll=Math.random(); let type='slime';
+    // weights: slime > goblin > boss, slightly increase boss chance over time
+    const bossP = 0.03 + Math.min(0.07, timer/180*0.07); // up to 0.10
+    const gobP = 0.12 + Math.min(0.10, timer/120*0.10); // up to 0.22
+    if(roll < bossP) type='boss'; else if(roll < bossP+gobP) type='goblin'; else type='slime';
+    enemies.push(new Enemy(x,y, type==='boss'? 26*scale : type==='goblin'? 20*scale : 16*scale, type));
+  }
+
+  // HUD updates
+  const hpfill=document.getElementById('hpfill'); const statScore=document.getElementById('statScore'); const statTime=document.getElementById('statTime');
+  function updateHUD(){ hpfill.style.width= `${(player.hp/player.maxhp)*100}%`; statScore.textContent = `スコア ${score}`; statTime.textContent = formatTime(Math.floor(timer)); }
+
+  // Ranking
+  const RKEY='puutaro_ranks_v1';
+  function loadRanks(){ try{ return JSON.parse(localStorage.getItem(RKEY)||'[]'); }catch(e){return []} }
+  function saveRank(sec){ const arr=loadRanks(); arr.push({sec, date:new Date().toISOString()}); arr.sort((a,b)=>a.sec-b.sec); localStorage.setItem(RKEY, JSON.stringify(arr.slice(0,10))); }
+  function renderRanks(){ const arr=loadRanks(); if(!arr.length){ document.getElementById('rankList').innerHTML = '<div class="muted">（まだ記録はありません）</div>'; return; }
+    const rows=arr.map((r,i)=>`<tr><td>${i+1}</td><td>${formatTime(r.sec)}</td><td class="muted">${new Date(r.date).toLocaleDateString()}</td></tr>`).join('');
+    document.getElementById('rankList').innerHTML = `<div class="badge">ランキング</div><table><thead><tr><th>#</th><th>タイム</th><th>日付</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // Game loop
+  let last=0; function loop(ts){ if(!last) last=ts; const dt=Math.min(0.033,(ts-last)/1000); last=ts; if(gameState==='playing') update(dt); draw(); requestAnimationFrame(loop); }
+
+  function startGame(){ reset(); gameState='playing'; document.getElementById('title').style.display='none'; document.getElementById('modalEnd').style.display='none'; AudioSys.startMusic(); }
+
+  function endGame(win){ gameState='end'; document.getElementById('modalEnd').style.display='grid';
+    const p=document.getElementById('endPanel');
+    if(win){ saveRank(Math.floor(timer)); renderRanks(); p.innerHTML=`<h2 style="margin:0 0 6px 0">クリア！</h2>
+      <div class="subtitle">スコア30に到達！タイム <b>${formatTime(Math.floor(timer))}</b></div>
+      <div class="rowwrap"><button class="primary" onclick="startGame()">▶ もう一度</button> <button class="ghost" onclick="backToTitle()">タイトルへ</button></div>
+      <div class="rank" id="rankAtEnd">${document.getElementById('rankList').innerHTML}</div>`; }
+    else {
+      p.innerHTML=`<h2 style="margin:0 0 6px 0">ゲームオーバー</h2>
+      <div class="subtitle">残念！また挑戦しよう。</div>
+      <div class="rowwrap"><button class="primary" onclick="startGame()">▶ リトライ</button> <button class="ghost" onclick="backToTitle()">タイトルへ</button></div>`;
+    }
+  }
+  function backToTitle(){ gameState='title'; document.getElementById('modalEnd').style.display='none'; document.getElementById('title').style.display='grid'; renderRanks(); }
+
+  function update(dt){
+    timer += dt; updateHUD();
+    // difficulty scaling
+    speedScale = 1 + Math.min(0.8, timer/90*0.6);
+    spawnInterval = Math.max(1.2, 2.4 - timer/90 * 0.7);
+
+    // spawn
+    lastSpawn += dt; if(lastSpawn>=spawnInterval){ lastSpawn=0; spawnEnemy(); }
+
+    // move player
+    const speed = 180*scale; player.vx = input.dx*speed; player.vy = input.dy*speed;
+    player.x += player.vx*dt; player.y += player.vy*dt;
+    // world bounds
+    player.x = clamp(player.x, 18*scale, W-18*scale); player.y = clamp(player.y, 18*scale, H-18*scale);
+    hitObstacle(player);
+    // facing
+    if(Math.abs(input.dx)+Math.abs(input.dy)>0.01){ player.facingX=input.dx; player.facingY=input.dy; }
+
+    // attacks
+    player.slashCD -= dt; player.fireCD -= dt;
+    if(input.slash && player.slashCD<=0){
+      // create melee arc as transient projectile
+      const len=28*scale; const fx=player.facingX, fy=player.facingY; const px=player.x+fx*18*scale, py=player.y+fy*18*scale;
+      projs.push(new Projectile(px,py, fx,fy, 0, 0.18, 'slash'));
+      player.slashCD=0.35; AudioSys.play('slash');
+    }
+    if(input.fire && player.fireCD<=0){
+      const fx=player.facingX||1, fy=player.facingY; const speedP=320*scale; const p=new Projectile(player.x+fx*20*scale, player.y+fy*20*scale, fx,fy, speedP, 1.2, 'fire'); projs.push(p); player.fireCD=0.7; AudioSys.play('fire');
+    }
+
+    // update projectiles
+    for(const p of projs){ p.life-=dt; if(p.kind==='fire'){ p.x+=p.vx*dt; p.y+=p.vy*dt; }
+      if(p.life<=0) p.dead=true; }
+
+    // enemies AI
+    for(const e of enemies){ e.t+=dt; const toX=player.x-e.x, toY=player.y-e.y; const d=Math.hypot(toX,toY)||1; let vx=toX/d, vy=toY/d; let sp=e.baseSpeed*speedScale;
+      if(e.type==='goblin'){ // zigzag on x while approaching
+        vx += Math.sin(e.t*4.0)*0.6; vy += Math.cos(e.t*1.6)*0.15; const len=Math.hypot(vx,vy)||1; vx/=len; vy/=len; sp*=1.1;
+      } else if(e.type==='boss'){
+        // wander + dash
+        const dash = (e.t%4.5)>3.6; if(dash){ sp*=2.1; }
+        vx += Math.sin(e.t*1.3)*0.25; vy += Math.cos(e.t*1.1)*0.25; const len=Math.hypot(vx,vy)||1; vx/=len; vy/=len;
+      }
+      e.x += vx*sp*dt; e.y += vy*sp*dt;
+      // bounds (enemies can pass obstacles forシンプル挙動)
+      if(e.x<-50||e.x>W+50||e.y<-50||e.y>H+50) e.dead=true; // just in case
+    }
+
+    // collisions: projectiles vs enemies
+    for(const e of enemies){ for(const p of projs){ if(p.dead) continue; if(p.kind==='slash'){
+          // short-range circle hit around player facing
+          if(Math.hypot(e.x-player.x, e.y-player.y) < e.r + 30*scale) { e.hp-= (e.type==='boss'?1:1); p.dead=true; if(e.hp<=0){ killEnemy(e); } }
+        } else if(p.kind==='fire'){
+          if(circleHit(e,p)){ e.hp-=2; p.dead=true; if(e.hp<=0){ killEnemy(e); } }
+        }
+      }
+    }
+
+    // enemy touch player
+    for(const e of enemies){ if(circleHit(e,player)){
+        if(nowMs() > player.invincibleUntil){ player.hp -= e.dmg; AudioSys.play('hit'); if(player.hp<=0){ AudioSys.play('dead'); endGame(false); return; }
+          // small knockback
+          const dx=player.x-e.x, dy=player.y-e.y, len=Math.hypot(dx,dy)||1; player.x+= (dx/len)*18*scale; player.y+=(dy/len)*18*scale; hitObstacle(player);
+        }
+      }
+
+    // stars pickup
+    for(const s of stars){ s.ttl-=dt; if(s.ttl<=0) s.dead=true; if(circleHit(s,player)){ s.dead=true; player.invincibleUntil=nowMs()+10000; AudioSys.play('star'); }
+    }
+
+    // cleanup
+    enemies=enemies.filter(e=>!e.dead);
+    projs=projs.filter(p=>!p.dead);
+    stars=stars.filter(s=>!s.dead);
+
+    // win condition
+    if(score>=30){ endGame(true); }
+  }
+
+  function killEnemy(e){ e.dead=true; const pts = e.type==='slime'?1: e.type==='goblin'?2:10; score+=pts; updateHUD();
+    // star drop chance
+    const drop = Math.random() < (e.type==='boss'? 0.5 : 0.12);
+    if(drop) stars.push( new Star(e.x, e.y) );
+  }
+
+  function drawBackground(){
+    // sky gradient
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,currentTheme.bg); g.addColorStop(1,'#ffffff'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // soft blobs
+    for(let i=0;i<4;i++){ const x=(i*0.23+0.15)*W, y=(i%2?0.22:0.32)*H; const r=220*scale; const grd=ctx.createRadialGradient(x,y,0,x,y,r);
+      grd.addColorStop(0, currentTheme.mid); grd.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+    // theme label
+    ctx.fillStyle='rgba(0,0,0,.05)'; ctx.font=`${16*scale}px system-ui`; ctx.fillText(`STAGE: ${themeKey.toUpperCase()}`, 10*scale, 22*scale);
+  }
+
+  function draw(){
+    resize(); // keep crisp on rotate/resize
+    drawBackground();
+    // obstacles
+    obstacles.forEach(o=>o.draw());
+
+    // stars
+    for(const s of stars){ const pulse= (Math.sin(nowMs()/200)+1)/2; ctx.beginPath(); ctx.fillStyle=`rgba(255,215,0,${0.6+0.4*pulse})`; ctx.arc(s.x,s.y, s.r, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle='rgba(255,165,0,.6)'; ctx.lineWidth=2; ctx.stroke(); }
+
+    // player
+    const invul = nowMs() < player.invincibleUntil; const glow = invul? 8*scale: 4*scale;
+    ctx.save(); ctx.shadowColor= invul? '#ffd700' : 'rgba(0,0,0,.18)'; ctx.shadowBlur=glow; ctx.fillStyle= invul? '#fffbe6' : '#ffffff';
+    ctx.beginPath(); ctx.arc(player.x,player.y, player.r, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    // face / sword direction
+    const fx=player.facingX||1, fy=player.facingY; ctx.beginPath(); ctx.strokeStyle='#2b4a62'; ctx.lineWidth=3; ctx.moveTo(player.x,player.y); ctx.lineTo(player.x+fx*player.r*1.2, player.y+fy*player.r*1.2); ctx.stroke();
+
+    // enemies
+    for(const e of enemies){
+      ctx.save(); ctx.shadowColor='rgba(0,0,0,.2)'; ctx.shadowBlur=6*scale; ctx.beginPath();
+      if(e.type==='slime'){ ctx.fillStyle='#7bdc8c'; }
+      else if(e.type==='goblin'){ ctx.fillStyle='#7fb0ff'; }
+      else { ctx.fillStyle='#ff9a5c'; }
+      ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
+      // hp pips
+      const maxhp = e.type==='slime'?1: e.type==='goblin'?3:5; const w= (e.r*2); const x=e.x-e.r; const y=e.y-e.r-8*scale; ctx.fillStyle='rgba(255,255,255,.8)'; ctx.fillRect(x,y,w,4*scale); ctx.fillStyle='#2b4a62'; ctx.fillRect(x,y, w*(e.hp/maxhp), 4*scale);
+      ctx.restore();
+    }
+
+    // projectiles
+    for(const p of projs){ if(p.kind==='fire'){
+        ctx.save(); ctx.shadowColor='#ff7f1a'; ctx.shadowBlur=10*scale; const grd=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,10*scale); grd.addColorStop(0,'#ffd2a1'); grd.addColorStop(1,'rgba(255,125,26,0)'); ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(p.x,p.y, 10*scale,0,Math.PI*2); ctx.fill(); ctx.restore();
+      } else {
+        // slash arc (draw as short crescent)
+        ctx.save(); ctx.strokeStyle='#2b4a62'; ctx.lineWidth=4; ctx.beginPath(); const ang=Math.atan2(player.facingY,player.facingX); ctx.arc(player.x,player.y, player.r*1.6, ang-0.7, ang+0.7); ctx.stroke(); ctx.restore();
+      }
+    }
+  }
+
+  // UI wiring
+  document.getElementById('startBtn').onclick=()=>{ AudioSys.ensure(); startGame(); };
+  document.getElementById('howBtn').onclick=()=>{ document.getElementById('modalHow').style.display='grid'; };
+  document.getElementById('howClose').onclick=()=>{ document.getElementById('modalHow').style.display='none'; };
+  document.getElementById('btnPause').onclick=()=>{ if(gameState!=='playing') return; gameState='paused'; document.getElementById('btnPause').textContent='▶';
+    const p=document.getElementById('endPanel'); document.getElementById('modalEnd').style.display='grid'; p.innerHTML=`<h2 style="margin:0 0 6px 0">一時停止</h2><div class="rowwrap"><button class="primary" onclick="resumeGame()">▶ 再開</button><button class="ghost" onclick="backToTitle()">タイトルへ</button></div>`;
+  };
+  function resumeGame(){ document.getElementById('modalEnd').style.display='none'; gameState='playing'; document.getElementById('btnPause').textContent='⏸'; }
+  window.resumeGame=resumeGame; window.backToTitle=backToTitle; window.startGame=startGame;
+
+  document.getElementById('btnAudio').onclick=()=>{ AudioSys.toggle(); document.getElementById('btnAudio').textContent = AudioSys.enabled? '🔊':'🔈'; };
+
+  // init
+  setupControls(); resize(); renderRanks(); requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
